@@ -3,206 +3,229 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>차원 여행</title>
+  <title>Webcam Delay Tunnel</title>
   <style>
-    @font-face {
-      font-family: 'SUIT-Regular';
-      src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_suit@1.0/SUIT-Regular.woff2') format('woff2');
-      font-weight: normal;
-      font-style: normal;
-    }
-
     body {
       margin: 0;
-      padding: 0;
-      background: black;
-      color: white;
-      font-family: 'SUIT-Regular', sans-serif;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       overflow: hidden;
-      text-align: center;
+      background: black;
+      font-family: Arial, sans-serif;
     }
-
-    #image-container {
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
       display: flex;
-      flex-direction: column;
-      justify-content: center;
       align-items: center;
+      gap: 20px;
+      color: white;
+    }
+    .slider-label {
+      font-size: 16px;
+      white-space: nowrap;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 400px;
+      height: 12px;
+      background: linear-gradient(to right, #000, #fff); /* 흑백 그라디언트 */
+      border-radius: 5px;
+      outline: none;
+      border: 1px solid white;
+      transition: background 0.3s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      background: #fff;
+      border-radius: 50%;
+      border: 3px solid #000;
       cursor: pointer;
+      transition: background 0.3s ease;
     }
-
-    .start-image {
-      width: 150px;
-      height: auto;
-      margin-bottom: 20px;
-      transition: transform 0.3s ease;   
-      border: 2px solid white;
-      border-radius: 10px;
-      transition: transform 0.3s ease, border 0.3s ease;
+    input[type="range"]:hover::-webkit-slider-thumb {
+      background: #aaa; /* 마우스 오버 시 더 밝게 */
     }
-
-    .start-image:hover {
-      transform: scale(1.1);
-      border: 2px solid #00ffcc;
-    }
-
-    .title {
-      font-size: 36px;
-      margin-top: 20px;
-    }
-
-    #animation-container {
-      display: none;
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
-
-    .shape {
+    #info {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: white;
-    }
-
-    .circle {
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-    }
-
-    .line {
-      width: 100px;
-      height: 5px;
-      border-radius: 0;
-    }
-
-    .square {
-      width: 100px;
-      height: 100px;
-      border-radius: 0;
-    }
-
-    #text-container {
-      position: absolute;
-      bottom: 80px;
-      width: 100%;
+      color: white;
       text-align: center;
       font-size: 18px;
+      line-height: 1.5;
+      max-width: 600px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border-radius: 10px;
+      display: none;
     }
-
-    .button-container {
+    #back-button {
       position: absolute;
-      bottom: 20px;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-    }
-
-    button {
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #444;
+      color: white;
       padding: 10px 20px;
-      font-size: 16px;
-      color: black;
-      background: white;
       border: none;
       border-radius: 5px;
+      font-size: 18px;
       cursor: pointer;
+      display: none;
     }
-
-    button:disabled {
+    #back-button:hover {
       background: #666;
-      color: #ccc;
-      cursor: not-allowed;
-    }
-
-    button:hover:enabled {
-      background: #00ffcc;
     }
   </style>
 </head>
 <body>
-  <!-- 첫 화면 -->
-  <div id="image-container" onclick="startJourney()">
-    <img src="image.png" alt="Start Button" class="start-image">
-    <div class="title">차원 여행</div>
+  <div id="controls">
+    <span class="slider-label">현재</span>
+    <input type="range" id="delay" min="50" max="1000" value="300">
+    <span class="slider-label">과거</span>
   </div>
-
-  <!-- 애니메이션 화면 -->
-  <div id="animation-container">
-    <div id="shape" class="shape circle"></div>
-    <div id="text-container"></div>
-    <div class="button-container">
-      <button id="prev-button" onclick="prevStep()" disabled>이전</button>
-      <button id="next-button" onclick="nextStep()">다음</button>
-    </div>
+  <div id="info">
+    4차원은 3차원 공간에 시간축이 더해진 시공간입니다.<br>
+    하단에 위치한 시간축 조절기를 통해 4차원을 체험해보세요.
   </div>
-
+  <button id="back-button">처음으로 돌아가기</button>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script>
-    let currentStepIndex = 0;
+    let scene, camera, renderer, video, frames = [], walls = [];
+    let delay = 300;
+    const maxFrames = 500;
+    const wallDistance = 10;
+    const wallSegments = 10;
 
-    const steps = [
-      { 
-        shapeClass: 'circle',
-        text: '0차원은 공간축이 없이 하나의 점으로 이루어져있습니다.'
-      },
-      { 
-        shapeClass: 'line',
-        text: '1차원은 하나의 공간축을 가지고 있어 수직선으로 표현됩니다.'
-      },
-      { 
-        shapeClass: 'square',
-        text: '2차원 시공간은 2개의 공간축을 가지고 있습니다. 입체의 개념은 없으며 면으로 표현됩니다.'
+    async function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.z = 5;
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      video = document.createElement('video');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      video.play();
+
+      const delayInput = document.getElementById('delay');
+      delayInput.addEventListener('input', (e) => {
+        delay = parseInt(e.target.value);
+      });
+
+      createTunnel();
+      animate();
+      window.addEventListener('resize', onWindowResize);
+
+      // Show the info text initially
+      showInfo();
+    }
+
+    function createTunnel() {
+      const planeSize = 10;
+      const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true });
+
+      for (let i = 0; i < wallSegments; i++) {
+        const zOffset = i * -wallDistance;
+
+        const topWall = new THREE.Mesh(new THREE.PlaneGeometry(planeSize, planeSize), material.clone());
+        topWall.rotation.x = Math.PI / 2;
+        topWall.position.set(0, planeSize / 2, zOffset);
+        scene.add(topWall);
+        walls.push(topWall);
+
+        const bottomWall = new THREE.Mesh(new THREE.PlaneGeometry(planeSize, planeSize), material.clone());
+        bottomWall.rotation.x = -Math.PI / 2;
+        bottomWall.position.set(0, -planeSize / 2, zOffset);
+        scene.add(bottomWall);
+        walls.push(bottomWall);
+
+        const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(planeSize, planeSize), material.clone());
+        leftWall.rotation.y = Math.PI / 2;
+        leftWall.position.set(-planeSize / 2, 0, zOffset);
+        scene.add(leftWall);
+        walls.push(leftWall);
+
+        const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(planeSize, planeSize), material.clone());
+        rightWall.rotation.y = -Math.PI / 2;
+        rightWall.position.set(planeSize / 2, 0, zOffset);
+        scene.add(rightWall);
+        walls.push(rightWall);
       }
-    ];
-
-    function startJourney() {
-      // 첫 화면 숨기기
-      document.getElementById('image-container').style.display = 'none';
-
-      // 애니메이션 화면 보이기
-      document.getElementById('animation-container').style.display = 'block';
-
-      // 첫 단계 표시
-      showStep(currentStepIndex);
     }
 
-    function showStep(index) {
-      const shapeElement = document.getElementById('shape');
-      const textContainer = document.getElementById('text-container');
+    function captureFrame() {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // 모양 업데이트
-      shapeElement.className = `shape ${steps[index].shapeClass}`;
-
-      // 텍스트 업데이트
-      textContainer.textContent = steps[index].text;
-
-      // 버튼 상태 업데이트
-      document.getElementById('prev-button').disabled = index === 0;
-      document.getElementById('next-button').textContent = index === steps.length - 1 ? '3차원으로 가기' : '다음';
+      if (frames.length >= maxFrames) frames.shift();
+      frames.push(canvas);
     }
 
-    function nextStep() {
-      if (currentStepIndex < steps.length - 1) {
-        currentStepIndex++;
-        showStep(currentStepIndex);
-      } else {
-        // 마지막 단계에서 링크로 이동
-        window.location.href = 'https://younseoultech.github.io/241210/';
-      }
+    function getDelayedTexture(index) {
+      const wallDelay = delay * (index / wallSegments);
+      const delayIndex = Math.max(0, frames.length - Math.floor(wallDelay / 16.67));
+      const canvas = frames[delayIndex] || frames[0];
+      return new THREE.CanvasTexture(canvas);
     }
 
-    function prevStep() {
-      if (currentStepIndex > 0) {
-        currentStepIndex--;
-        showStep(currentStepIndex);
-      }
+    function animate() {
+      requestAnimationFrame(animate);
+
+      captureFrame();
+
+      walls.forEach((wall, index) => {
+        const delayedTexture = getDelayedTexture(index);
+        wall.material.map = delayedTexture;
+        wall.material.needsUpdate = true;
+      });
+
+      camera.position.z -= 0.1;
+
+      walls.forEach((wall) => {
+        if (wall.position.z > camera.position.z + 10) {
+          wall.position.z -= wallSegments * wallDistance;
+        }
+      });
+
+      renderer.render(scene, camera);
     }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function showInfo() {
+      const info = document.getElementById('info');
+      const backButton = document.getElementById('back-button');
+      info.style.display = 'block';
+
+      setTimeout(() => {
+        info.style.display = 'none';
+        backButton.style.display = 'block';
+      }, 4000);
+    }
+
+    document.getElementById('back-button').addEventListener('click', () => {
+      window.location.href = 'https://younseoultech.github.io/241211_1/'; // 지정된 URL로 연결
+    });
+
+    init();
   </script>
 </body>
 </html>
